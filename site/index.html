@@ -1419,6 +1419,8 @@ function saveNote(lemma, text) { state.notes[lemma] = text; localStorage.setItem
 function toggleSense(chk, exId) { const exChk = document.getElementById(`chk_ex_${exId}`); const exRow = document.getElementById(`row_ex_${exId}`); if(exChk && exRow) { if (!chk.checked) { exChk.checked = false; exChk.disabled = true; exRow.classList.add('disabled'); } else { exChk.disabled = false; exRow.classList.remove('disabled'); exChk.checked = true; } } }
 function startSelection() {
   SELECTION_MODE = true;
+  // Ensure we're adding a new card, not editing a previous one.
+  EDIT_CARD_ID = null;
   // Default to no duplicates each time selection starts.
   ALLOW_DUPLICATES = false;
   const saved = localStorage.getItem('lex_v9_last_add_deck');

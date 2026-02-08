@@ -1011,7 +1011,7 @@ function mapCardToWord(wordData, card) {
 function buildSnapshotFromWord(wordData, selectedSenseIds) {
   if (!wordData || !Array.isArray(wordData.senses)) return null;
   const selected = new Set((selectedSenseIds || []).map(s => s.toString()));
-  const senses = wordData.senses
+  let senses = wordData.senses
     .filter(s => selected.size === 0 || selected.has(s.id.toString()))
     .map(s => ({
       id: s.id,
@@ -1020,6 +1020,15 @@ function buildSnapshotFromWord(wordData, selectedSenseIds) {
       ex: s.ex,
       ex_id: s.ex_id
     }));
+  if (selected.size > 0 && senses.length === 0) {
+    senses = wordData.senses.map(s => ({
+      id: s.id,
+      attr: s.attr,
+      def: s.def,
+      ex: s.ex,
+      ex_id: s.ex_id
+    }));
+  }
   return {
     lemma: wordData.lemma,
     pos: wordData.pos,
@@ -1028,10 +1037,27 @@ function buildSnapshotFromWord(wordData, selectedSenseIds) {
   };
 }
 
+function ensureCardSnapshot(card, wordData) {
+  if (!card || card.snapshot || !wordData) return;
+  const snap = buildSnapshotFromWord(wordData, card.senses);
+  if (!snap) return;
+  const idx = state.deck.findIndex(c => c.id === card.id);
+  if (idx !== -1) {
+    state.deck[idx].snapshot = snap;
+    localStorage.setItem('lex_v9_deck', JSON.stringify(state.deck));
+  }
+  card.snapshot = snap;
+}
+
 function setupStaticRouteListeners() {
   const handler = () => {
     const slug = getSlugFromPath() || getSlugFromHash();
-    if (slug) openStaticEntryBySlug(slug);
+    if (slug) {
+      openStaticEntryBySlug(slug);
+    } else {
+      goHome();
+      $('#entryPanel').innerHTML = '';
+    }
   };
   window.addEventListener("hashchange", handler);
   window.addEventListener("popstate", handler);
@@ -1111,6 +1137,7 @@ async function exportDeckToAnki() {
       }
       if (!wordData && card.snapshot) wordData = card.snapshot;
       if (!wordData) throw new Error("Word not found");
+      ensureCardSnapshot(card, wordData);
       ensureIds(wordData);
       const backHtml = buildReviewHtml(wordData, card);
       rows.push(`${tsvEscape(card.lemma)}\t${tsvEscape(backHtml)}`);
@@ -1382,6 +1409,9 @@ function saveSelection() {
   localStorage.setItem('lex_v9_deck', JSON.stringify(state.deck));
   cancelSelection();
   updateDashboard();
+  if ($('#deckBrowser').style.display === 'block') {
+    filterBrowser($('#browserSearch').value || '');
+  }
   showToast("Card saved");
 }
 
@@ -1491,6 +1521,7 @@ async function loadCardInBrowser(id) {
         ensureIds(wordData); // Apply ID Fix
         if (wordData.senses) {
             const mappedCard = mapCardToWord(wordData, card);
+            ensureCardSnapshot(card, wordData);
             EDITOR_WORDDATA = wordData;
             renderEntry($('#editorBack'), wordData, false, mappedCard, true); 
         }
@@ -1616,9 +1647,11 @@ async function loadReviewCard() {
     if (!wordData) throw new Error("Word not found");
 
     ensureIds(wordData);
+    ensureCardSnapshot(card, wordData);
     const mappedCard = mapCardToWord(wordData, card);
     const allIds = wordData.senses.map(s => s.id);
-    const cardIndices = mappedCard.senses.map(sid => allIds.indexOf(sid) + 1).filter(i => i > 0).sort((a,b)=>a-b);
+    const allIdsStr = allIds.map(id => id.toString());
+    const cardIndices = mappedCard.senses.map(sid => allIdsStr.indexOf(sid.toString()) + 1).filter(i => i > 0).sort((a,b)=>a-b);
     if (cardIndices.length < allIds.length) $('#cardFrontContext').textContent = `(Senses ${cardIndices.join(', ')})`; else $('#cardFrontContext').textContent = '';
     const factor = card.factor || 2.5;
     const ivl = card.interval || 0;

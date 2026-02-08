@@ -420,20 +420,34 @@
 <div id="reportModal" class="modal-backdrop" onclick="closeReportModal(event)">
   <div class="modal">
     <h3>Report an issue</h3>
-    <div class="field">
-      <label>Lemma</label>
-      <div id="reportLemma" style="font-weight:600;"></div>
-    </div>
-    <div class="field">
-      <label for="reportComment">Comment</label>
-      <textarea id="reportComment" class="input" style="min-height:120px; resize:vertical;"></textarea>
-    </div>
-    <div class="actions">
-      <button class="btn primary" onclick="sendReportEmail()">Send report</button>
-      <button class="btn" onclick="closeReportModal()">Cancel</button>
-    </div>
+    <form id="reportForm" method="POST" target="report_sink">
+      <input type="hidden" id="reportLemmaInput" name="lemma" />
+      <input type="hidden" id="reportUrlInput" name="url" />
+      <input type="hidden" id="reportSubjectInput" name="subject" />
+      <input type="hidden" id="reportUserAgent" name="user_agent" />
+      <input type="hidden" id="reportTimestamp" name="timestamp" />
+      <input type="hidden" name="name" value="Logodaedaly Report" />
+      <div class="field">
+        <label>Lemma</label>
+        <div id="reportLemma" style="font-weight:600;"></div>
+      </div>
+      <div class="field">
+        <label for="reportEmail">Your email (optional)</label>
+        <input id="reportEmail" name="email" class="input" type="email" placeholder="you@example.com" />
+      </div>
+      <div class="field">
+        <label for="reportComment">Comment</label>
+        <textarea id="reportComment" name="message" class="input" style="min-height:120px; resize:vertical;"></textarea>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn primary" onclick="sendReportEmail()">Send report</button>
+        <button type="button" class="btn" onclick="closeReportModal()">Cancel</button>
+      </div>
+    </form>
   </div>
 </div>
+
+<iframe name="report_sink" style="display:none;"></iframe>
 
 <script>window.__STATIC_INDEX__ = true;window.__API_BASE__ = '';window.__MOBILE__ = window.matchMedia('(max-width: 760px)').matches;document.title = 'Logodaedaly — English Dictionary for Serious Learners';</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -637,6 +651,10 @@ let REPORT_CONTEXT = null;
 function openReportModal(lemma) {
   REPORT_CONTEXT = { lemma: lemma || '', url: window.location.href };
   $('#reportLemma').textContent = REPORT_CONTEXT.lemma || '(unknown)';
+  $('#reportLemmaInput').value = REPORT_CONTEXT.lemma || '';
+  $('#reportUrlInput').value = REPORT_CONTEXT.url || '';
+  $('#reportSubjectInput').value = `Report: ${REPORT_CONTEXT.lemma || 'Unknown lemma'}`;
+  $('#reportEmail').value = '';
   $('#reportComment').value = '';
   $('#reportModal').classList.add('open');
   setTimeout(() => $('#reportComment').focus(), 0);
@@ -647,28 +665,19 @@ function closeReportModal(e) {
   $('#reportModal').classList.remove('open');
 }
 
-async function sendReportEmail() {
+function sendReportEmail() {
   if (!REPORT_CONTEXT) return;
   if (!REPORT_ENDPOINT) { showToast("Reporting not configured"); return; }
-  const comment = $('#reportComment').value || '(no comment)';
-  const payload = new FormData();
-  // Standard fields for form backends + extra context.
-  payload.append("name", "Logodaedaly Report");
-  payload.append("email", "noreply@logodaedaly.pages.dev");
-  payload.append("subject", `Report: ${REPORT_CONTEXT.lemma}`);
-  payload.append("message", comment);
-  payload.append("lemma", REPORT_CONTEXT.lemma);
-  payload.append("url", REPORT_CONTEXT.url);
-  payload.append("user_agent", navigator.userAgent);
-  payload.append("timestamp", new Date().toISOString());
-  try {
-    // Many static form endpoints require no-cors; we treat a successful send as no exception.
-    await fetch(REPORT_ENDPOINT, { method: "POST", body: payload, mode: "no-cors" });
-    closeReportModal();
-    showToast("Report sent. Thank you.");
-  } catch (e) {
-    showToast("Report failed to send");
-  }
+  const emailInput = $('#reportEmail');
+  const email = (emailInput.value || '').trim() || 'anonymous@logodaedaly.pages.dev';
+  emailInput.value = email;
+  $('#reportUserAgent').value = navigator.userAgent;
+  $('#reportTimestamp').value = new Date().toISOString();
+  const form = $('#reportForm');
+  form.setAttribute('action', REPORT_ENDPOINT);
+  form.submit();
+  closeReportModal();
+  showToast("Report sent. Thank you.");
 }
 
 function loadPendingDeletes() {

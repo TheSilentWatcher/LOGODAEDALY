@@ -395,6 +395,7 @@ let STATIC_SLUG_MAP = null;
 let STATIC_SLUG_TO_CHUNK = null;
 let STATIC_CHUNK_CACHE = new Map();
 let STATIC_SLUG_MAP_LOWER = null;
+let EDITOR_WORDDATA = null;
 
 const FALLBACK_WORDS = ["abandon", "ability", "absorb", "abstract", "academic", "accept", "access", "accident"];
 
@@ -1008,6 +1009,26 @@ function mapCardToWord(wordData, card) {
   return { ...card, senses: finalSenses };
 }
 
+function buildSnapshotFromWord(wordData, selectedSenseIds) {
+  if (!wordData || !Array.isArray(wordData.senses)) return null;
+  const selected = new Set((selectedSenseIds || []).map(s => s.toString()));
+  const senses = wordData.senses
+    .filter(s => selected.size === 0 || selected.has(s.id.toString()))
+    .map(s => ({
+      id: s.id,
+      attr: s.attr,
+      def: s.def,
+      ex: s.ex,
+      ex_id: s.ex_id
+    }));
+  return {
+    lemma: wordData.lemma,
+    pos: wordData.pos,
+    ipa: wordData.ipa,
+    senses
+  };
+}
+
 function setupStaticRouteListeners() {
   const handler = () => {
     const slug = getSlugFromPath() || getSlugFromHash();
@@ -1089,6 +1110,7 @@ async function exportDeckToAnki() {
         const r = await fetch(`${API_BASE}/word/${card.lemma}`);
         if (r.ok) wordData = await r.json();
       }
+      if (!wordData && card.snapshot) wordData = card.snapshot;
       if (!wordData) throw new Error("Word not found");
       ensureIds(wordData);
       const backHtml = buildReviewHtml(wordData, card);
@@ -1344,12 +1366,14 @@ function saveSelection() {
 
   const hiddenEx = [];
   document.querySelectorAll('.chk-ex:not(:disabled)').forEach(cb => { if (!cb.checked) hiddenEx.push(cb.value); });
+  const snapshot = buildSnapshotFromWord(CURRENT_WORD, selectedSenses);
   const newCard = {
     id: Date.now() + Math.random().toString().slice(2,5),
     lemma: CURRENT_WORD.lemma,
     deck: state.selectedDeckForAdd,
     senses: selectedSenses,
     hiddenEx: hiddenEx,
+    snapshot: snapshot,
     includeNotes: $('#chkIncludeNotes').checked,
     due: Date.now(),
     interval: 0,
@@ -1468,6 +1492,7 @@ async function loadCardInBrowser(id) {
         ensureIds(wordData); // Apply ID Fix
         if (wordData.senses) {
             const mappedCard = mapCardToWord(wordData, card);
+            EDITOR_WORDDATA = wordData;
             renderEntry($('#editorBack'), wordData, false, mappedCard, true); 
         }
     } catch(e) {
@@ -1488,6 +1513,10 @@ function saveCardFromEditor() {
         state.deck[cardIdx].senses = selectedSenses; 
         state.deck[cardIdx].hiddenEx = hiddenEx; 
         state.deck[cardIdx].includeNotes = container.querySelector('#chkIncludeNotes').checked; 
+        if (EDITOR_WORDDATA) {
+            const snapshot = buildSnapshotFromWord(EDITOR_WORDDATA, selectedSenses);
+            state.deck[cardIdx].snapshot = snapshot;
+        }
         localStorage.setItem('lex_v9_deck', JSON.stringify(state.deck)); 
         showToast("Card saved");
     }
@@ -1581,6 +1610,9 @@ async function loadReviewCard() {
       const r = await fetch(`${API_BASE}/word/${card.lemma}`);
       if(!r.ok) throw new Error("Word not found");
       wordData = await r.json();
+    }
+    if (!wordData && card.snapshot) {
+      wordData = card.snapshot;
     }
     if (!wordData) throw new Error("Word not found");
 

@@ -987,7 +987,8 @@ function getAnkiStyleBlock() {
 
 function buildReviewHtml(wordData, card) {
   const container = document.createElement('div');
-  renderEntry(container, wordData, true, card);
+  const mappedCard = mapCardToWord(wordData, card);
+  renderEntry(container, wordData, true, mappedCard);
   const styleBlock = getAnkiStyleBlock();
   return `${styleBlock}<div class="anki-root"><div class="anki-card">${container.innerHTML}</div></div>`;
 }
@@ -1004,9 +1005,15 @@ async function exportDeckToAnki() {
   const rows = [];
   for (const card of cards) {
     try {
-      const r = await fetch(`${API_BASE}/word/${card.lemma}`);
-      if (!r.ok) throw new Error("Word not found");
-      const wordData = await r.json();
+      let wordData = null;
+      if (STATIC_MODE) {
+        wordData = await fetchStaticEntryByLemma(card.lemma);
+      } else {
+        const r = await fetch(`${API_BASE}/word/${card.lemma}`);
+        if (!r.ok) throw new Error("Word not found");
+        wordData = await r.json();
+      }
+      if (!wordData) throw new Error("Word not found");
       ensureIds(wordData);
       const backHtml = buildReviewHtml(wordData, card);
       const plain = backHtml.replace(/<[^>]*>/g, '').trim();

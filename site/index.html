@@ -819,6 +819,21 @@ async function openStaticEntryBySlug(slug) {
   }
 }
 
+async function fetchStaticEntryByLemma(lemma) {
+  if (!lemma) return null;
+  const slug = getSlugForLemma(lemma);
+  let chunkName = STATIC_SLUG_TO_CHUNK ? STATIC_SLUG_TO_CHUNK.get(slug) : null;
+  if (!chunkName) return null;
+  if (!STATIC_CHUNK_CACHE.has(chunkName)) {
+    const r = await fetch(`${window.location.origin}/data/${chunkName}`);
+    if (!r.ok) throw new Error("Chunk not found");
+    const data = await r.json();
+    STATIC_CHUNK_CACHE.set(chunkName, data);
+  }
+  const data = STATIC_CHUNK_CACHE.get(chunkName);
+  return data.find(e => e.slug === slug) || null;
+}
+
 function setupStaticRouteListeners() {
   const handler = () => {
     const slug = getSlugFromPath() || getSlugFromHash();
@@ -1188,9 +1203,15 @@ async function loadCardInBrowser(id) {
     $('#editorFront').textContent = card.lemma;
 
     try {
-        const r = await fetch(`${API_BASE}/word/${card.lemma}`);
-        if(!r.ok) throw new Error("Word not found");
-        const wordData = await r.json();
+        let wordData = null;
+        if (STATIC_MODE) {
+            wordData = await fetchStaticEntryByLemma(card.lemma);
+            if (!wordData) throw new Error("Word not found");
+        } else {
+            const r = await fetch(`${API_BASE}/word/${card.lemma}`);
+            if(!r.ok) throw new Error("Word not found");
+            wordData = await r.json();
+        }
         ensureIds(wordData); // Apply ID Fix
         if (wordData.senses) {
             renderEntry($('#editorBack'), wordData, false, card, true); 

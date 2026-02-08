@@ -56,7 +56,7 @@ def inject_index(template: str) -> str:
         f"window.__STATIC_INDEX__ = true;"
         f"window.__API_BASE__ = '';"
         "window.__MOBILE__ = window.matchMedia('(max-width: 760px)').matches;"
-        "document.title = 'Logodaedaly';"
+        "document.title = 'Logodaedaly — English Dictionary for Serious Learners';"
         "</script>\n"
     )
     marker = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>'

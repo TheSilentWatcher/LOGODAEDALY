@@ -875,6 +875,24 @@ async function fetchStaticEntryByLemma(lemma) {
   return data.find(e => e.slug === slug) || null;
 }
 
+function mapCardToWord(wordData, card) {
+  if (!wordData || !card || !Array.isArray(card.senses)) return card;
+  const allIds = wordData.senses.map(s => s.id);
+  const mapped = card.senses.map((sid) => {
+    if (typeof sid === 'string') {
+      const m = sid.match(/^gen_(\d+)$/);
+      if (m) {
+        const idx = parseInt(m[1], 10);
+        return wordData.senses[idx] ? wordData.senses[idx].id : sid;
+      }
+    }
+    return sid;
+  });
+  const anyMatch = mapped.some(ms => allIds.map(id => id.toString()).includes(ms.toString()));
+  const finalSenses = anyMatch ? mapped : allIds;
+  return { ...card, senses: finalSenses };
+}
+
 function setupStaticRouteListeners() {
   const handler = () => {
     const slug = getSlugFromPath() || getSlugFromHash();
@@ -990,7 +1008,14 @@ function renderEntry(target, word, isReview = false, cardData = null, isBrowserE
   const showAll = isLocked || TEMP_EXPANDED || SELECTION_MODE || isReview || isBrowserEdit;
   
   const usedSenseIds = new Set();
-  if (SELECTION_MODE && !ALLOW_DUPLICATES && !isEditing) { state.deck.forEach(c => { if (c.lemma === word.lemma && c.deck === state.selectedDeckForAdd) c.senses.forEach(sid => usedSenseIds.add(sid)); }); }
+  if (SELECTION_MODE && !ALLOW_DUPLICATES && !isEditing) {
+    const targetLemma = (word.lemma || '').toLowerCase();
+    state.deck.forEach(c => {
+      if ((c.lemma || '').toLowerCase() === targetLemma && c.deck === state.selectedDeckForAdd) {
+        c.senses.forEach(sid => usedSenseIds.add(sid));
+      }
+    });
+  }
 
   const visibleIDs = new Set();
   if (isReview && cardData) { 
@@ -1083,7 +1108,7 @@ function renderEntry(target, word, isReview = false, cardData = null, isBrowserE
       const saveAction = isEditing ? `saveEdit()` : `saveSelection()`;
       btnHtml = `<div style="display:flex; gap:8px;"><button class="btn" style="height:32px;" onclick="cancelSelection()">Cancel</button><button class="btn-circle active" onclick="${saveAction}" title="Save">✓</button></div>`;
     } else {
-      const existing = state.deck.find(c => c.lemma === word.lemma);
+      const existing = state.deck.find(c => (c.lemma || '').toLowerCase() === (word.lemma || '').toLowerCase());
       btnHtml = `<button class="btn-circle ${existing ? 'added' : ''}" onclick="startSelection()" title="${existing ? 'Add another card' : 'Add to Review'}">${existing ? '✓' : '+'}</button>`;
     }
   }
@@ -1131,6 +1156,8 @@ function saveNote(lemma, text) { state.notes[lemma] = text; localStorage.setItem
 function toggleSense(chk, exId) { const exChk = document.getElementById(`chk_ex_${exId}`); const exRow = document.getElementById(`row_ex_${exId}`); if(exChk && exRow) { if (!chk.checked) { exChk.checked = false; exChk.disabled = true; exRow.classList.add('disabled'); } else { exChk.disabled = false; exRow.classList.remove('disabled'); exChk.checked = true; } } }
 function startSelection() {
   SELECTION_MODE = true;
+  // Default to no duplicates each time selection starts.
+  ALLOW_DUPLICATES = false;
   const saved = localStorage.getItem('lex_v9_last_add_deck');
   if (saved && state.decks.includes(saved)) {
     state.selectedDeckForAdd = saved;
@@ -1250,7 +1277,8 @@ async function loadCardInBrowser(id) {
         }
         ensureIds(wordData); // Apply ID Fix
         if (wordData.senses) {
-            renderEntry($('#editorBack'), wordData, false, card, true); 
+            const mappedCard = mapCardToWord(wordData, card);
+            renderEntry($('#editorBack'), wordData, false, mappedCard, true); 
         }
     } catch(e) {
         $('#editorBack').innerHTML = `<div style="color:var(--danger); padding:20px;">Error loading word data.</div>`;
@@ -1334,8 +1362,9 @@ async function loadReviewCard() {
   if (!wordData) { $('#cardBackContent').innerHTML = `<div style="color:var(--danger); padding:20px;">Error loading word data.</div>`; return; }
 
   ensureIds(wordData);
+  const mappedCard = mapCardToWord(wordData, card);
   const allIds = wordData.senses.map(s => s.id);
-  const cardIndices = card.senses.map(sid => allIds.indexOf(sid) + 1).filter(i => i > 0).sort((a,b)=>a-b);
+  const cardIndices = mappedCard.senses.map(sid => allIds.indexOf(sid) + 1).filter(i => i > 0).sort((a,b)=>a-b);
   if (cardIndices.length < allIds.length) $('#cardFrontContext').textContent = `(Senses ${cardIndices.join(', ')})`; else $('#cardFrontContext').textContent = '';
   const factor = card.factor || 2.5;
   const ivl = card.interval || 0;
@@ -1343,7 +1372,7 @@ async function loadReviewCard() {
   $('#time-again').textContent = '1m';
   $('#time-good').textContent = fmt(ivl === 0 ? 1 : ivl * factor);
   $('#time-easy').textContent = fmt(ivl === 0 ? 4 : ivl * factor * 1.3);
-  renderEntry($('#cardBackContent'), wordData, true, card);
+  renderEntry($('#cardBackContent'), wordData, true, mappedCard);
 }
 
 function rateCard(rating) { 

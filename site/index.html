@@ -652,14 +652,18 @@ async function sendReportEmail() {
   if (!REPORT_ENDPOINT) { showToast("Reporting not configured"); return; }
   const comment = $('#reportComment').value || '(no comment)';
   const payload = new FormData();
+  // Standard fields for form backends + extra context.
+  payload.append("name", "Logodaedaly Report");
+  payload.append("email", "noreply@logodaedaly.pages.dev");
+  payload.append("subject", `Report: ${REPORT_CONTEXT.lemma}`);
+  payload.append("message", comment);
   payload.append("lemma", REPORT_CONTEXT.lemma);
   payload.append("url", REPORT_CONTEXT.url);
-  payload.append("comment", comment);
   payload.append("user_agent", navigator.userAgent);
   payload.append("timestamp", new Date().toISOString());
   try {
-    const res = await fetch(REPORT_ENDPOINT, { method: "POST", body: payload });
-    if (!res.ok) throw new Error("Report failed");
+    // Many static form endpoints require no-cors; we treat a successful send as no exception.
+    await fetch(REPORT_ENDPOINT, { method: "POST", body: payload, mode: "no-cors" });
     closeReportModal();
     showToast("Report sent. Thank you.");
   } catch (e) {

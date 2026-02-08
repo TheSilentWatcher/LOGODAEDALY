@@ -781,14 +781,28 @@ function initLandingAnimation() {
 function animateDrifters() {
   const searchBox = $('#centerSearchContainer').getBoundingClientRect();
   const maxX = window.innerWidth; const maxY = window.innerHeight;
+  const pad = 8;
+  const left = searchBox.left - pad;
+  const right = searchBox.right + pad;
+  const top = searchBox.top - pad;
+  const bottom = searchBox.bottom + pad;
   DRIFTERS.forEach(d => {
     if (d.el.dataset.frozen === "true") return;
     if (d.w === 0) { const r = d.el.getBoundingClientRect(); d.w = r.width; d.h = r.height; }
     d.x += d.vx; d.y += d.vy;
     if (d.x <= 0 || d.x + d.w >= maxX) d.vx *= -1; if (d.y <= 0 || d.y + d.h >= maxY) d.vy *= -1;
-    if (d.x < searchBox.right && d.x + d.w > searchBox.left && d.y < searchBox.bottom && d.y + d.h > searchBox.top) {
-        const centerX = d.x + d.w/2; const centerY = d.y + d.h/2; const boxCenterX = searchBox.left + searchBox.width/2; const boxCenterY = searchBox.top + searchBox.height/2;
-        if (Math.abs(centerX - boxCenterX) > Math.abs(centerY - boxCenterY)) d.vx *= -1; else d.vy *= -1;
+    if (d.x < right && d.x + d.w > left && d.y < bottom && d.y + d.h > top) {
+      const overlapX = Math.min(d.x + d.w - left, right - d.x);
+      const overlapY = Math.min(d.y + d.h - top, bottom - d.y);
+      if (overlapX < overlapY) {
+        d.vx *= -1;
+        if (d.x + d.w / 2 < (left + right) / 2) d.x = left - d.w - 1;
+        else d.x = right + 1;
+      } else {
+        d.vy *= -1;
+        if (d.y + d.h / 2 < (top + bottom) / 2) d.y = top - d.h - 1;
+        else d.y = bottom + 1;
+      }
     }
     d.el.style.transform = `translate(${d.x}px, ${d.y}px)`;
   });

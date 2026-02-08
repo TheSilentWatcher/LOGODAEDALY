@@ -50,29 +50,13 @@ def inject_data(template: str, data: Dict) -> str:
         raise ValueError("Template missing supabase script tag.")
     return template.replace(marker, inject + marker, 1)
 
-def inject_index(template: str, *, mobile: bool) -> str:
-    redirect = (
-        "(() => {"
-        "const isMobile = window.matchMedia('(max-width: 760px)').matches;"
-        "const path = window.location.pathname;"
-        "const hash = window.location.hash || '';"
-        "const route = path.startsWith('/lemma/') ? path : (hash.startsWith('#') ? hash.slice(1) : '');"
-        "if (isMobile && path !== '/m.html') {"
-        "  window.location.replace('/m.html#' + route);"
-        "}"
-        "if (!isMobile && path === '/m.html') {"
-        "  const r = route || '';"
-        "  window.location.replace('/index.html#' + r);"
-        "}"
-        "})();"
-    )
+def inject_index(template: str) -> str:
     inject = (
         "<script>"
         f"window.__STATIC_INDEX__ = true;"
         f"window.__API_BASE__ = '';"
-        f"window.__MOBILE__ = {'true' if mobile else 'false'};"
+        "window.__MOBILE__ = window.matchMedia('(max-width: 760px)').matches;"
         "document.title = 'Logodaedaly';"
-        f"{redirect}"
         "</script>\n"
     )
     marker = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>'
@@ -155,19 +139,14 @@ def write_site(out_dir: Path, chunk_size: int) -> Tuple[int, int]:
     manifest_path = out_dir / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
 
-    # Write desktop + mobile index pages.
+    # Write index page (auto-adapts to mobile).
     index_path = out_dir / "index.html"
-    index_html = inject_index(template, mobile=False)
+    index_html = inject_index(template)
     index_path.write_text(index_html, encoding="utf-8")
-
-    mobile_path = out_dir / "m.html"
-    mobile_html = inject_index(template, mobile=True)
-    mobile_path.write_text(mobile_html, encoding="utf-8")
 
     # SPA fallback for Cloudflare Pages
     redirects_path = out_dir / "_redirects"
     redirects_path.write_text(
-        "/m.html /m.html 200\n"
         "/index.html /index.html 200\n"
         "/lemma/* /index.html 200\n"
         "/* /index.html 200\n",

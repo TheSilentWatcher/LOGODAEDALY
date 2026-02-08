@@ -346,7 +346,7 @@
   </div>
 </div>
 
-<script>window.__STATIC_INDEX__ = true;window.__API_BASE__ = '';window.__MOBILE__ = false;document.title = 'Logodaedaly';(() => {const isMobile = window.matchMedia('(max-width: 760px)').matches;const path = window.location.pathname;const hash = window.location.hash || '';const route = path.startsWith('/lemma/') ? path : (hash.startsWith('#') ? hash.slice(1) : '');if (isMobile && path !== '/m.html') {  window.location.replace('/m.html#' + route);}if (!isMobile && path === '/m.html') {  const r = route || '';  window.location.replace('/index.html#' + r);}})();</script>
+<script>window.__STATIC_INDEX__ = true;window.__API_BASE__ = '';window.__MOBILE__ = window.matchMedia('(max-width: 760px)').matches;document.title = 'Logodaedaly';</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const API_BASE = window.__API_BASE__ || `${window.location.origin}/api`;
@@ -389,9 +389,10 @@ let state = {
 const $ = (s) => document.querySelector(s);
 
 async function init() {
-  if (window.__MOBILE__ === true) {
-    document.body.classList.add('mobile');
-  }
+  const isMobile = (typeof window.__MOBILE__ !== 'undefined')
+    ? window.__MOBILE__
+    : window.matchMedia('(max-width: 760px)').matches;
+  if (isMobile) document.body.classList.add('mobile');
   setupTabs(); setupSearch(); setupShortcuts();
   populateDeckSelects();
   updateDashboard(); 
@@ -958,13 +959,8 @@ async function exportDeckToAnki() {
 async function selectWord(l) {
   if (STATIC_MODE) {
     const slug = getSlugForLemma(l);
-    if (isLocalhost()) {
-      window.location.hash = `/lemma/${slug}`;
-      openStaticEntryBySlug(slug);
-    } else {
-      window.history.pushState({}, "", `/lemma/${slug}`);
-      openStaticEntryBySlug(slug);
-    }
+    window.location.hash = `/lemma/${slug}`;
+    openStaticEntryBySlug(slug);
     return;
   }
   $('#landingLayer').style.display = 'none'; 

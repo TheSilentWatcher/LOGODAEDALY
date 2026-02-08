@@ -388,9 +388,10 @@ let state = {
 const $ = (s) => document.querySelector(s);
 
 async function init() {
-  if (window.__MOBILE__ === true) {
-    document.body.classList.add('mobile');
-  }
+  const isMobile = (typeof window.__MOBILE__ !== 'undefined')
+    ? window.__MOBILE__
+    : window.matchMedia('(max-width: 760px)').matches;
+  if (isMobile) document.body.classList.add('mobile');
   setupTabs(); setupSearch(); setupShortcuts();
   populateDeckSelects();
   updateDashboard(); 
@@ -957,13 +958,8 @@ async function exportDeckToAnki() {
 async function selectWord(l) {
   if (STATIC_MODE) {
     const slug = getSlugForLemma(l);
-    if (isLocalhost()) {
-      window.location.hash = `/lemma/${slug}`;
-      openStaticEntryBySlug(slug);
-    } else {
-      window.history.pushState({}, "", `/lemma/${slug}`);
-      openStaticEntryBySlug(slug);
-    }
+    window.location.hash = `/lemma/${slug}`;
+    openStaticEntryBySlug(slug);
     return;
   }
   $('#landingLayer').style.display = 'none'; 

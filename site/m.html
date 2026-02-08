@@ -346,6 +346,7 @@
   </div>
 </div>
 
+<script>window.__STATIC_INDEX__ = true;window.__API_BASE__ = '';window.__MOBILE__ = true;document.title = 'Logodaedaly';(() => {const isMobile = window.matchMedia('(max-width: 760px)').matches;const path = window.location.pathname;const hash = window.location.hash || '';const route = path.startsWith('/lemma/') ? path : (hash.startsWith('#') ? hash.slice(1) : '');if (isMobile && path !== '/m.html') {  window.location.replace('/m.html#' + route);}if (!isMobile && path === '/m.html') {  const r = route || '';  window.location.replace('/index.html#' + r);}})();</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const API_BASE = window.__API_BASE__ || `${window.location.origin}/api`;

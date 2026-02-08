@@ -184,6 +184,16 @@
       .def-card { margin: 8px 12px; }
       .notes-section { margin: 10px 12px 12px 12px; }
     }
+
+    /* Mobile dedicated layout (auto-redirect variant) */
+    body.mobile header { flex-direction: column; align-items: flex-start; }
+    body.mobile nav { width: 100%; justify-content: space-between; }
+    body.mobile #centerSearchContainer { width: 94vw; top: 26%; }
+    body.mobile .grid-layout { grid-template-columns: 1fr; gap: 16px; }
+    body.mobile .browser-grid { grid-template-columns: 1fr; }
+    body.mobile .browser-sidebar { max-height: 240px; }
+    body.mobile .flashcard-inner { min-height: 260px; }
+    body.mobile .review-controls { grid-template-columns: 1fr; }
   </style>
 </head>
 <body>
@@ -336,7 +346,7 @@
   </div>
 </div>
 
-<script>window.__STATIC_INDEX__ = true;window.__API_BASE__ = '';document.title = 'Logodaedaly';</script>
+<script>window.__STATIC_INDEX__ = true;window.__API_BASE__ = '';window.__MOBILE__ = false;document.title = 'Logodaedaly';(() => {const isMobile = window.matchMedia('(max-width: 760px)').matches;const path = window.location.pathname;const hash = window.location.hash || '';const route = path.startsWith('/lemma/') ? path : (hash.startsWith('#') ? hash.slice(1) : '');if (isMobile && path !== '/m.html') {  window.location.replace('/m.html#' + route);}if (!isMobile && path === '/m.html') {  const r = route || '';  window.location.replace('/index.html#' + r);}})();</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const API_BASE = window.__API_BASE__ || `${window.location.origin}/api`;
@@ -379,6 +389,9 @@ let state = {
 const $ = (s) => document.querySelector(s);
 
 async function init() {
+  if (window.__MOBILE__ === true) {
+    document.body.classList.add('mobile');
+  }
   setupTabs(); setupSearch(); setupShortcuts();
   populateDeckSelects();
   updateDashboard(); 
@@ -1421,6 +1434,16 @@ function setupSearch() {
       targetList.innerHTML = filtered.map(l => 
         `<div class="result-item" onclick="selectWord('${l}')">${l}</div>`
       ).join('');
+    };
+    input.onkeydown = (e) => {
+      if (e.key !== 'Enter') return;
+      const isLanding = input.id === 'landingSearch';
+      const targetList = isLanding ? $('#landingResults') : $('#resultsList');
+      const firstItem = targetList.querySelector('.result-item');
+      if (firstItem) {
+        e.preventDefault();
+        firstItem.click();
+      }
     };
   });
 }

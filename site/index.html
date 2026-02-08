@@ -756,11 +756,26 @@ function initLandingAnimation() {
   const count = Math.min(8, source.length); 
   DRIFTERS = [];
 
+  const searchBox = $('#centerSearchContainer').getBoundingClientRect();
+  const pad = 20;
+  const maxX = window.innerWidth;
+  const maxY = window.innerHeight;
+
   for(let i=0; i<count; i++) {
     const word = source[Math.floor(Math.random() * source.length)];
     const el = document.createElement('div'); el.className = 'drifting-word'; el.textContent = word; el.onclick = () => { selectWord(word); };
-    const x = Math.random() * (window.innerWidth - 100);
-    const y = Math.random() * (window.innerHeight - 100);
+    let x = 0, y = 0, tries = 0;
+    do {
+      x = Math.random() * (maxX - 100);
+      y = Math.random() * (maxY - 100);
+      tries++;
+    } while (
+      tries < 60 &&
+      x < (searchBox.right + pad) &&
+      (x + 100) > (searchBox.left - pad) &&
+      y < (searchBox.bottom + pad) &&
+      (y + 30) > (searchBox.top - pad)
+    );
     el.style.transform = `translate(${x}px, ${y}px)`; container.appendChild(el);
     el.onmouseenter = () => { el.dataset.frozen = "true"; }; el.onmouseleave = () => { el.dataset.frozen = "false"; };
     DRIFTERS.push({ el, x, y, vx: (Math.random()-0.5)*0.8, vy: (Math.random()-0.5)*0.8, w:0, h:0 });

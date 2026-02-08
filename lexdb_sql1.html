@@ -1232,7 +1232,35 @@ function changeAddDeck(val) {
   renderEntry($('#entryPanel'), CURRENT_WORD);
 }
 function toggleAllowDups(val) { ALLOW_DUPLICATES = val; renderEntry($('#entryPanel'), CURRENT_WORD); }
-function saveSelection() { const selectedSenses = Array.from(document.querySelectorAll('.chk-sense:checked:not(:disabled)')).map(cb => cb.value); if (selectedSenses.length === 0) { showToast("Select at least one definition"); return; } const hiddenEx = []; document.querySelectorAll('.chk-ex:not(:disabled)').forEach(cb => { if (!cb.checked) hiddenEx.push(cb.value); }); const newCard = { id: Date.now() + Math.random().toString().slice(2,5), lemma: CURRENT_WORD.lemma, deck: state.selectedDeckForAdd, senses: selectedSenses, hiddenEx: hiddenEx, includeNotes: $('#chkIncludeNotes').checked, due: Date.now(), interval: 0, factor: 2.5 }; state.deck.push(newCard); localStorage.setItem('lex_v9_deck', JSON.stringify(state.deck)); cancelSelection(); updateDashboard(); showToast("Card saved"); }
+function saveSelection() {
+  const selectedSenses = Array.from(document.querySelectorAll('.chk-sense:checked:not(:disabled)')).map(cb => cb.value);
+  if (selectedSenses.length === 0) { showToast("Select at least one definition"); return; }
+
+  if (!ALLOW_DUPLICATES) {
+    const lemmaLower = (CURRENT_WORD?.lemma || '').toLowerCase();
+    const exists = state.deck.some(c => (c.lemma || '').toLowerCase() === lemmaLower && c.deck === state.selectedDeckForAdd);
+    if (exists) { showToast("Card already exists in this deck"); return; }
+  }
+
+  const hiddenEx = [];
+  document.querySelectorAll('.chk-ex:not(:disabled)').forEach(cb => { if (!cb.checked) hiddenEx.push(cb.value); });
+  const newCard = {
+    id: Date.now() + Math.random().toString().slice(2,5),
+    lemma: CURRENT_WORD.lemma,
+    deck: state.selectedDeckForAdd,
+    senses: selectedSenses,
+    hiddenEx: hiddenEx,
+    includeNotes: $('#chkIncludeNotes').checked,
+    due: Date.now(),
+    interval: 0,
+    factor: 2.5
+  };
+  state.deck.push(newCard);
+  localStorage.setItem('lex_v9_deck', JSON.stringify(state.deck));
+  cancelSelection();
+  updateDashboard();
+  showToast("Card saved");
+}
 
 function saveEdit() { 
   const selectedSenses = Array.from(document.querySelectorAll('.chk-sense:checked:not(:disabled)')).map(cb => cb.value); 

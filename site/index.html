@@ -756,27 +756,11 @@ function initLandingAnimation() {
   const count = Math.min(8, source.length); 
   DRIFTERS = [];
 
-  const searchBox = $('#centerSearchContainer').getBoundingClientRect();
-  const pad = 20;
-  const maxX = window.innerWidth;
-  const maxY = window.innerHeight;
-  
   for(let i=0; i<count; i++) {
     const word = source[Math.floor(Math.random() * source.length)];
     const el = document.createElement('div'); el.className = 'drifting-word'; el.textContent = word; el.onclick = () => { selectWord(word); };
-    // Place words outside the search box area.
-    let x = 0, y = 0, tries = 0;
-    do {
-      x = Math.random() * (maxX - 100);
-      y = Math.random() * (maxY - 100);
-      tries++;
-    } while (
-      tries < 50 &&
-      x < (searchBox.right + pad) &&
-      (x + 100) > (searchBox.left - pad) &&
-      y < (searchBox.bottom + pad) &&
-      (y + 30) > (searchBox.top - pad)
-    );
+    const x = Math.random() * (window.innerWidth - 100);
+    const y = Math.random() * (window.innerHeight - 100);
     el.style.transform = `translate(${x}px, ${y}px)`; container.appendChild(el);
     el.onmouseenter = () => { el.dataset.frozen = "true"; }; el.onmouseleave = () => { el.dataset.frozen = "false"; };
     DRIFTERS.push({ el, x, y, vx: (Math.random()-0.5)*0.8, vy: (Math.random()-0.5)*0.8, w:0, h:0 });
@@ -1332,7 +1316,35 @@ function startSession(cramMode = false) {
 }
 
 function quitSession() { $('#reviewSession').style.display = 'none'; $('#deckDashboard').style.display = 'block'; updateDashboard(); }
-async function loadReviewCard() { const card = state.queue[state.idx]; $('#reviewProgress').textContent = `${state.idx + 1} / ${state.queue.length}`; $('#activeFlashcard').classList.remove('flipped'); $('#reviewControls').classList.remove('visible'); $('#cardFrontLemma').textContent = card.lemma; const r = await fetch(`${API_BASE}/word/${card.lemma}`); const wordData = await r.json(); ensureIds(wordData); const allIds = wordData.senses.map(s => s.id); const cardIndices = card.senses.map(sid => allIds.indexOf(sid) + 1).filter(i => i > 0).sort((a,b)=>a-b); if (cardIndices.length < allIds.length) $('#cardFrontContext').textContent = `(Senses ${cardIndices.join(', ')})`; else $('#cardFrontContext').textContent = ''; const factor = card.factor || 2.5; const ivl = card.interval || 0; const fmt = (d) => d < 1 ? '1m' : Math.round(d) + 'd'; $('#time-again').textContent = '1m'; $('#time-good').textContent = fmt(ivl === 0 ? 1 : ivl * factor); $('#time-easy').textContent = fmt(ivl === 0 ? 4 : ivl * factor * 1.3); renderEntry($('#cardBackContent'), wordData, true, card); }
+async function loadReviewCard() {
+  const card = state.queue[state.idx];
+  $('#reviewProgress').textContent = `${state.idx + 1} / ${state.queue.length}`;
+  $('#activeFlashcard').classList.remove('flipped');
+  $('#reviewControls').classList.remove('visible');
+  $('#cardFrontLemma').textContent = card.lemma;
+
+  let wordData = null;
+  if (STATIC_MODE) {
+    wordData = await fetchStaticEntryByLemma(card.lemma);
+  } else {
+    const r = await fetch(`${API_BASE}/word/${card.lemma}`);
+    if(!r.ok) { $('#cardBackContent').innerHTML = `<div style="color:var(--danger); padding:20px;">Error loading word data.</div>`; return; }
+    wordData = await r.json();
+  }
+  if (!wordData) { $('#cardBackContent').innerHTML = `<div style="color:var(--danger); padding:20px;">Error loading word data.</div>`; return; }
+
+  ensureIds(wordData);
+  const allIds = wordData.senses.map(s => s.id);
+  const cardIndices = card.senses.map(sid => allIds.indexOf(sid) + 1).filter(i => i > 0).sort((a,b)=>a-b);
+  if (cardIndices.length < allIds.length) $('#cardFrontContext').textContent = `(Senses ${cardIndices.join(', ')})`; else $('#cardFrontContext').textContent = '';
+  const factor = card.factor || 2.5;
+  const ivl = card.interval || 0;
+  const fmt = (d) => d < 1 ? '1m' : Math.round(d) + 'd';
+  $('#time-again').textContent = '1m';
+  $('#time-good').textContent = fmt(ivl === 0 ? 1 : ivl * factor);
+  $('#time-easy').textContent = fmt(ivl === 0 ? 4 : ivl * factor * 1.3);
+  renderEntry($('#cardBackContent'), wordData, true, card);
+}
 
 function rateCard(rating) { 
   const card = state.queue[state.idx]; 

@@ -383,6 +383,7 @@ let STATIC_MODE = false;
 let STATIC_SLUG_MAP = null;
 let STATIC_SLUG_TO_CHUNK = null;
 let STATIC_CHUNK_CACHE = new Map();
+let STATIC_SLUG_MAP_LOWER = null;
 
 const FALLBACK_WORDS = ["abandon", "ability", "absorb", "abstract", "academic", "accept", "access", "accident"];
 
@@ -427,6 +428,7 @@ async function init() {
         STATIC_MODE = true;
         if (Array.isArray(manifest) && manifest.length > 0 && typeof manifest[0] === "object") {
           STATIC_SLUG_MAP = new Map(manifest.map(m => [m.lemma, m.slug]));
+          STATIC_SLUG_MAP_LOWER = new Map(manifest.map(m => [m.lemma.toLowerCase(), m.slug]));
           STATIC_SLUG_TO_CHUNK = new Map(manifest.map(m => [m.slug, m.chunk]));
           LEXICON_INDEX = manifest.map(m => m.lemma);
         } else {
@@ -445,6 +447,7 @@ async function init() {
       STATIC_MODE = true;
       if (Array.isArray(manifest) && manifest.length > 0 && typeof manifest[0] === "object") {
         STATIC_SLUG_MAP = new Map(manifest.map(m => [m.lemma, m.slug]));
+        STATIC_SLUG_MAP_LOWER = new Map(manifest.map(m => [m.lemma.toLowerCase(), m.slug]));
         STATIC_SLUG_TO_CHUNK = new Map(manifest.map(m => [m.slug, m.chunk]));
         LEXICON_INDEX = manifest.map(m => m.lemma);
       } else {
@@ -476,6 +479,7 @@ async function init() {
       STATIC_MODE = true;
       if (Array.isArray(manifest) && manifest.length > 0 && typeof manifest[0] === "object") {
         STATIC_SLUG_MAP = new Map(manifest.map(m => [m.lemma, m.slug]));
+        STATIC_SLUG_MAP_LOWER = new Map(manifest.map(m => [m.lemma.toLowerCase(), m.slug]));
         STATIC_SLUG_TO_CHUNK = new Map(manifest.map(m => [m.slug, m.chunk]));
         LEXICON_INDEX = manifest.map(m => m.lemma);
       } else {
@@ -820,6 +824,10 @@ function getSlugForLemma(lemma) {
   if (STATIC_SLUG_MAP && STATIC_SLUG_MAP.has(lemma)) {
     return STATIC_SLUG_MAP.get(lemma);
   }
+  if (STATIC_SLUG_MAP_LOWER && typeof lemma === 'string') {
+    const lower = lemma.toLowerCase();
+    if (STATIC_SLUG_MAP_LOWER.has(lower)) return STATIC_SLUG_MAP_LOWER.get(lower);
+  }
   return slugifyLemma(lemma);
 }
 
@@ -876,6 +884,21 @@ async function openStaticEntryBySlug(slug) {
 
 async function fetchStaticEntryByLemma(lemma) {
   if (!lemma) return null;
+  if (!STATIC_SLUG_TO_CHUNK) {
+    try {
+      const r2 = await fetch(`${window.location.origin}/manifest.json`);
+      if (r2.ok) {
+        const manifest = await r2.json();
+        STATIC_MODE = true;
+        if (Array.isArray(manifest) && manifest.length > 0 && typeof manifest[0] === "object") {
+          STATIC_SLUG_MAP = new Map(manifest.map(m => [m.lemma, m.slug]));
+          STATIC_SLUG_MAP_LOWER = new Map(manifest.map(m => [m.lemma.toLowerCase(), m.slug]));
+          STATIC_SLUG_TO_CHUNK = new Map(manifest.map(m => [m.slug, m.chunk]));
+          LEXICON_INDEX = manifest.map(m => m.lemma);
+        }
+      }
+    } catch(e) {}
+  }
   const slug = getSlugForLemma(lemma);
   let chunkName = STATIC_SLUG_TO_CHUNK ? STATIC_SLUG_TO_CHUNK.get(slug) : null;
   if (!chunkName) return null;
@@ -1365,28 +1388,32 @@ async function loadReviewCard() {
   $('#reviewControls').classList.remove('visible');
   $('#cardFrontLemma').textContent = card.lemma;
 
-  let wordData = null;
-  if (STATIC_MODE) {
-    wordData = await fetchStaticEntryByLemma(card.lemma);
-  } else {
-    const r = await fetch(`${API_BASE}/word/${card.lemma}`);
-    if(!r.ok) { $('#cardBackContent').innerHTML = `<div style="color:var(--danger); padding:20px;">Error loading word data.</div>`; return; }
-    wordData = await r.json();
-  }
-  if (!wordData) { $('#cardBackContent').innerHTML = `<div style="color:var(--danger); padding:20px;">Error loading word data.</div>`; return; }
+  try {
+    let wordData = null;
+    if (STATIC_MODE) {
+      wordData = await fetchStaticEntryByLemma(card.lemma);
+    } else {
+      const r = await fetch(`${API_BASE}/word/${card.lemma}`);
+      if(!r.ok) throw new Error("Word not found");
+      wordData = await r.json();
+    }
+    if (!wordData) throw new Error("Word not found");
 
-  ensureIds(wordData);
-  const mappedCard = mapCardToWord(wordData, card);
-  const allIds = wordData.senses.map(s => s.id);
-  const cardIndices = mappedCard.senses.map(sid => allIds.indexOf(sid) + 1).filter(i => i > 0).sort((a,b)=>a-b);
-  if (cardIndices.length < allIds.length) $('#cardFrontContext').textContent = `(Senses ${cardIndices.join(', ')})`; else $('#cardFrontContext').textContent = '';
-  const factor = card.factor || 2.5;
-  const ivl = card.interval || 0;
-  const fmt = (d) => d < 1 ? '1m' : Math.round(d) + 'd';
-  $('#time-again').textContent = '1m';
-  $('#time-good').textContent = fmt(ivl === 0 ? 1 : ivl * factor);
-  $('#time-easy').textContent = fmt(ivl === 0 ? 4 : ivl * factor * 1.3);
-  renderEntry($('#cardBackContent'), wordData, true, mappedCard);
+    ensureIds(wordData);
+    const mappedCard = mapCardToWord(wordData, card);
+    const allIds = wordData.senses.map(s => s.id);
+    const cardIndices = mappedCard.senses.map(sid => allIds.indexOf(sid) + 1).filter(i => i > 0).sort((a,b)=>a-b);
+    if (cardIndices.length < allIds.length) $('#cardFrontContext').textContent = `(Senses ${cardIndices.join(', ')})`; else $('#cardFrontContext').textContent = '';
+    const factor = card.factor || 2.5;
+    const ivl = card.interval || 0;
+    const fmt = (d) => d < 1 ? '1m' : Math.round(d) + 'd';
+    $('#time-again').textContent = '1m';
+    $('#time-good').textContent = fmt(ivl === 0 ? 1 : ivl * factor);
+    $('#time-easy').textContent = fmt(ivl === 0 ? 4 : ivl * factor * 1.3);
+    renderEntry($('#cardBackContent'), wordData, true, mappedCard);
+  } catch(e) {
+    $('#cardBackContent').innerHTML = `<div style="color:var(--danger); padding:20px;">Error loading word data.<br><small>${e.message}</small></div>`;
+  }
 }
 
 function rateCard(rating) { 

@@ -99,6 +99,8 @@
     .expand-control { padding: 12px 20px; display: flex; align-items: center; gap: 15px; border-top: 1px solid var(--border-2); margin-top: 10px; background: var(--panel); }
     .expand-btn { font-size: 13px; font-weight: 600; color: var(--fg); cursor: pointer; background: none; border: none; padding: 0; text-decoration: underline; }
     .hidden-sense { display: none; }
+    .report-row { padding: 10px 20px 14px 20px; display: flex; justify-content: flex-end; border-top: 1px dashed var(--border-2); }
+    .report-link { font-size: 12px; color: var(--muted); text-decoration: underline; cursor: pointer; background: none; border: none; }
 
     .notes-toggle { margin: 10px 20px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
     .notes-container { margin: 0 20px 20px 20px; display: none; }
@@ -244,6 +246,7 @@
     body.mobile .notes-container { margin-left: 0; margin-right: 0; }
     body.mobile .notes-area { min-height: 96px; }
     body.mobile .expand-control { padding: 10px 12px; }
+    body.mobile .report-row { padding: 10px 12px 12px 12px; justify-content: flex-start; }
 
     body.mobile #deckDashboard > div { max-width: 100% !important; padding: 18px 12px 32px !important; }
     body.mobile #deckDashboard h1 { font-size: 20px; }
@@ -410,6 +413,24 @@
       <span class="link" id="authToggle" onclick="toggleAuthMode()">Create account</span>
       <span class="link" id="authResend" onclick="resendConfirmation()" style="display:none;">Resend confirmation</span>
       <span class="link" onclick="closeAuthModal()">Cancel</span>
+    </div>
+  </div>
+</div>
+
+<div id="reportModal" class="modal-backdrop" onclick="closeReportModal(event)">
+  <div class="modal">
+    <h3>Report an issue</h3>
+    <div class="field">
+      <label>Lemma</label>
+      <div id="reportLemma" style="font-weight:600;"></div>
+    </div>
+    <div class="field">
+      <label for="reportComment">Comment</label>
+      <textarea id="reportComment" class="input" style="min-height:120px; resize:vertical;"></textarea>
+    </div>
+    <div class="actions">
+      <button class="btn primary" onclick="sendReportEmail()">Send report</button>
+      <button class="btn" onclick="closeReportModal()">Cancel</button>
     </div>
   </div>
 </div>
@@ -606,6 +627,43 @@ function initAuth() {
   setInterval(() => {
     if (CURRENT_USER) saveProgress();
   }, 60000);
+}
+
+// Report modal
+const REPORT_ENDPOINT = window.__REPORT_ENDPOINT__ || 'https://sendform.net/!4Tq9jOLPbt';
+let REPORT_CONTEXT = null;
+
+function openReportModal(lemma) {
+  REPORT_CONTEXT = { lemma: lemma || '', url: window.location.href };
+  $('#reportLemma').textContent = REPORT_CONTEXT.lemma || '(unknown)';
+  $('#reportComment').value = '';
+  $('#reportModal').classList.add('open');
+  setTimeout(() => $('#reportComment').focus(), 0);
+}
+
+function closeReportModal(e) {
+  if (e && e.target !== e.currentTarget) return;
+  $('#reportModal').classList.remove('open');
+}
+
+async function sendReportEmail() {
+  if (!REPORT_CONTEXT) return;
+  if (!REPORT_ENDPOINT) { showToast("Reporting not configured"); return; }
+  const comment = $('#reportComment').value || '(no comment)';
+  const payload = new FormData();
+  payload.append("lemma", REPORT_CONTEXT.lemma);
+  payload.append("url", REPORT_CONTEXT.url);
+  payload.append("comment", comment);
+  payload.append("user_agent", navigator.userAgent);
+  payload.append("timestamp", new Date().toISOString());
+  try {
+    const res = await fetch(REPORT_ENDPOINT, { method: "POST", body: payload });
+    if (!res.ok) throw new Error("Report failed");
+    closeReportModal();
+    showToast("Report sent. Thank you.");
+  } catch (e) {
+    showToast("Report failed to send");
+  }
 }
 
 function loadPendingDeletes() {
@@ -1433,7 +1491,8 @@ function renderEntry(target, word, isReview = false, cardData = null, isBrowserE
   if (isReview) {
       target.innerHTML = `<div class="entry-body">${bodyHtml}</div>`;
   } else {
-      target.innerHTML = `<div class="entry-card ${SELECTION_MODE ? 'selection-mode' : ''}"><div class="entry-header"><div class="entry-header-row"><div class="entry-title-row"><div class="lemma-text">${word.lemma}</div><span class="pill ipa-pill">${word.ipa || ''}</span>${deckSelectHtml}</div><div class="entry-actions">${btnHtml}</div></div></div><div class="entry-body">${bodyHtml}</div>${(!isReview && !SELECTION_MODE && (totalSenses > 3 || showAll)) ? `<div class="expand-control"><button class="expand-btn" onclick="toggleExpand()">${btnText}</button><div class="lock-wrapper ${isLocked ? 'active' : ''}" onclick="toggleLock(this)"><div class="lock-icon"></div></div></div>` : ''}</div>`;
+      const reportHtml = !isReview ? `<div class="report-row"><button class="report-link" onclick='openReportModal(${JSON.stringify(word.lemma || "")})'>Report an error</button></div>` : '';
+      target.innerHTML = `<div class="entry-card ${SELECTION_MODE ? 'selection-mode' : ''}"><div class="entry-header"><div class="entry-header-row"><div class="entry-title-row"><div class="lemma-text">${word.lemma}</div><span class="pill ipa-pill">${word.ipa || ''}</span>${deckSelectHtml}</div><div class="entry-actions">${btnHtml}</div></div></div><div class="entry-body">${bodyHtml}</div>${(!isReview && !SELECTION_MODE && (totalSenses > 3 || showAll)) ? `<div class="expand-control"><button class="expand-btn" onclick="toggleExpand()">${btnText}</button><div class="lock-wrapper ${isLocked ? 'active' : ''}" onclick="toggleLock(this)"><div class="lock-icon"></div></div></div>` : ''}${reportHtml}</div>`;
   }
 }
 

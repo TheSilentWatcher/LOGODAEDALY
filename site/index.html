@@ -129,6 +129,7 @@
     #cardList li { padding: 12px 15px; border-bottom: 1px solid var(--border-2); cursor: pointer; font-size: 13px; font-weight: 500; display: flex; justify-content: space-between; align-items: center; }
     #cardList li:hover { background: var(--panel); }
     #cardList li.selected { background: var(--fg); color: var(--bg); }
+    #cardList li.pending-delete { opacity: 0.4; filter: grayscale(1); pointer-events: none; }
     .browser-editor { border: 1px solid var(--border); border-radius: var(--radius); display: flex; flex-direction: column; background: var(--bg); overflow: hidden; }
     .editor-scroll-area { flex: 1; overflow-y: auto; padding: 20px; }
     .editor-section { margin-bottom: 25px; }
@@ -766,11 +767,26 @@ function initLandingAnimation() {
   const count = Math.min(8, source.length); 
   DRIFTERS = [];
 
+  const searchBox = $('#centerSearchContainer').getBoundingClientRect();
+  const pad = 50;
+  const maxX = window.innerWidth;
+  const maxY = window.innerHeight;
+
   for(let i=0; i<count; i++) {
     const word = source[Math.floor(Math.random() * source.length)];
     const el = document.createElement('div'); el.className = 'drifting-word'; el.textContent = word; el.onclick = () => { selectWord(word); };
-    const x = Math.random() * (window.innerWidth - 100);
-    const y = Math.random() * (window.innerHeight - 100);
+    let x = 0, y = 0, tries = 0;
+    do {
+      x = Math.random() * (maxX - 100);
+      y = Math.random() * (maxY - 100);
+      tries++;
+    } while (
+      tries < 80 &&
+      x < (searchBox.right + pad) &&
+      (x + 100) > (searchBox.left - pad) &&
+      y < (searchBox.bottom + pad) &&
+      (y + 30) > (searchBox.top - pad)
+    );
     el.style.transform = `translate(${x}px, ${y}px)`; container.appendChild(el);
     el.onmouseenter = () => { el.dataset.frozen = "true"; }; el.onmouseleave = () => { el.dataset.frozen = "false"; };
     DRIFTERS.push({ el, x, y, vx: (Math.random()-0.5)*0.8, vy: (Math.random()-0.5)*0.8, w:0, h:0 });
@@ -781,7 +797,7 @@ function initLandingAnimation() {
 function animateDrifters() {
   const searchBox = $('#centerSearchContainer').getBoundingClientRect();
   const maxX = window.innerWidth; const maxY = window.innerHeight;
-  const pad = 8;
+  const pad = 50; // keep-out zone around search bar
   const left = searchBox.left - pad;
   const right = searchBox.right + pad;
   const top = searchBox.top - pad;
@@ -796,12 +812,12 @@ function animateDrifters() {
       const overlapY = Math.min(d.y + d.h - top, bottom - d.y);
       if (overlapX < overlapY) {
         d.vx *= -1;
-        if (d.x + d.w / 2 < (left + right) / 2) d.x = left - d.w - 1;
-        else d.x = right + 1;
+        if (d.x + d.w / 2 < (left + right) / 2) d.x = left - d.w - 2;
+        else d.x = right + 2;
       } else {
         d.vy *= -1;
-        if (d.y + d.h / 2 < (top + bottom) / 2) d.y = top - d.h - 1;
-        else d.y = bottom + 1;
+        if (d.y + d.h / 2 < (top + bottom) / 2) d.y = top - d.h - 2;
+        else d.y = bottom + 2;
       }
     }
     d.el.style.transform = `translate(${d.x}px, ${d.y}px)`;
@@ -993,9 +1009,11 @@ async function exportDeckToAnki() {
       const wordData = await r.json();
       ensureIds(wordData);
       const backHtml = buildReviewHtml(wordData, card);
-      rows.push(`${tsvEscape(card.lemma)}\t${tsvEscape(backHtml)}`);
+      const plain = backHtml.replace(/<[^>]*>/g, '').trim();
+      const safeBack = plain ? backHtml : `<div>${card.lemma}</div>`;
+      rows.push(`${tsvEscape(card.lemma)}\t${tsvEscape(safeBack)}`);
     } catch (e) {
-      rows.push(`${tsvEscape(card.lemma)}\t${tsvEscape('(Missing data)')}`);
+      rows.push(`${tsvEscape(card.lemma)}\t${tsvEscape(`<div>${card.lemma}</div>`)}`);
     }
   }
 
@@ -1263,6 +1281,30 @@ function saveSelection() {
   showToast("Card saved");
 }
 
+function softDeleteCard(cardId, opts = {}) {
+  if (!cardId) return;
+  if (PENDING_DELETES[cardId]) return;
+  const cardIdx = state.deck.findIndex(c => c.id == cardId);
+  if (cardIdx === -1) return;
+  const card = state.deck[cardIdx];
+
+  const li = document.querySelector(`#card_li_${cardId}`);
+  if (li) li.classList.add('pending-delete');
+
+  const timer = setTimeout(() => {
+    state.deck = state.deck.filter(c => c.id !== cardId);
+    localStorage.setItem('lex_v9_deck', JSON.stringify(state.deck));
+    delete PENDING_DELETES[cardId];
+    if (li) li.remove();
+    if (opts.onDelete) opts.onDelete();
+    updateDashboard();
+  }, 2500);
+
+  PENDING_DELETES[cardId] = timer;
+  ACTION_STACK.push({ type: 'soft_delete', id: cardId, card: card, index: cardIdx });
+  showToast("Card deleted", "Undo", () => undoLastAction());
+}
+
 function saveEdit() { 
   const selectedSenses = Array.from(document.querySelectorAll('.chk-sense:checked:not(:disabled)')).map(cb => cb.value); 
   if (selectedSenses.length === 0) { showToast("Select at least one definition"); return; } 
@@ -1376,20 +1418,49 @@ function saveCardFromEditor() {
 
 function deleteCardFromEditor() {
     if(!EDIT_CARD_ID) return;
-    if(confirm("Delete this card forever?")) {
-        state.deck = state.deck.filter(c => c.id !== EDIT_CARD_ID);
-        localStorage.setItem('lex_v9_deck', JSON.stringify(state.deck));
+    const id = EDIT_CARD_ID;
+    softDeleteCard(id, {
+      onDelete: () => {
         filterBrowser($('#browserSearch').value);
         $('#editorContent').style.display = 'none';
         $('#editorPlaceholder').style.display = 'flex';
         EDIT_CARD_ID = null;
-        updateDashboard();
-        showToast("Card deleted");
-    }
+      }
+    });
 }
 
 function showToast(msg, actionText = null, actionCallback = null) { const t = document.createElement('div'); t.className = 'toast'; t.innerHTML = `<span>${msg}</span>`; if(actionText) { const act = document.createElement('span'); act.className = 'toast-action'; act.textContent = actionText; act.onclick = () => { actionCallback(); t.remove(); }; t.appendChild(act); } $('#toastContainer').appendChild(t); setTimeout(() => { if(t.parentNode) t.remove(); }, 4000); }
-function undoLastAction() { const last = ACTION_STACK.pop(); if(!last) return showToast("Nothing to undo"); if (last.type === 'rate') { state.idx = last.idx; const cardIdx = state.deck.findIndex(c => c.id === last.cardId); if(cardIdx !== -1) { state.deck[cardIdx] = last.oldData; localStorage.setItem('lex_v9_deck', JSON.stringify(state.deck)); } loadReviewCard(); showToast("Rating undone"); } else if (last.type === 'soft_delete') { clearTimeout(PENDING_DELETES[last.id]); delete PENDING_DELETES[last.id]; showBrowser(); showToast("Deletion undone"); } }
+function undoLastAction() {
+  const last = ACTION_STACK.pop();
+  if(!last) return showToast("Nothing to undo");
+  if (last.type === 'rate') {
+    state.idx = last.idx;
+    const cardIdx = state.deck.findIndex(c => c.id === last.cardId);
+    if(cardIdx !== -1) {
+      state.deck[cardIdx] = last.oldData;
+      localStorage.setItem('lex_v9_deck', JSON.stringify(state.deck));
+    }
+    loadReviewCard();
+    showToast("Rating undone");
+  } else if (last.type === 'soft_delete') {
+    if (PENDING_DELETES[last.id]) {
+      clearTimeout(PENDING_DELETES[last.id]);
+      delete PENDING_DELETES[last.id];
+      const li = document.querySelector(`#card_li_${last.id}`);
+      if (li) li.classList.remove('pending-delete');
+    } else {
+      // Restore if already removed
+      const exists = state.deck.some(c => c.id === last.id);
+      if (!exists && last.card) {
+        const insertAt = Math.min(last.index ?? state.deck.length, state.deck.length);
+        state.deck.splice(insertAt, 0, last.card);
+        localStorage.setItem('lex_v9_deck', JSON.stringify(state.deck));
+      }
+    }
+    showBrowser();
+    showToast("Deletion undone");
+  }
+}
 
 function startSession(cramMode = false) { 
   const deckName = $('#dashboardDeckSelect').value; 
@@ -1494,7 +1565,17 @@ async function editCurrentCard() {
   renderEntry($('#entryPanel'), CURRENT_WORD, false, card); 
 }
 
-function deleteCurrentCard() { const card = state.queue[state.idx]; if(confirm("Delete this card forever?")) { state.deck = state.deck.filter(c => c.id !== card.id); localStorage.setItem('lex_v9_deck', JSON.stringify(state.deck)); state.queue.splice(state.idx, 1); if(state.idx < state.queue.length) loadReviewCard(); else quitSession(); } }
+function deleteCurrentCard() {
+  const card = state.queue[state.idx];
+  if (!card) return;
+  softDeleteCard(card.id, {
+    onDelete: () => {
+      state.queue = state.queue.filter(c => c.id !== card.id);
+      if(state.idx < state.queue.length) loadReviewCard();
+      else quitSession();
+    }
+  });
+}
 
 function setupTabs() { 
   document.querySelectorAll('#mainNav a').forEach(a => { 

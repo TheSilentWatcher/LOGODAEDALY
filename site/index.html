@@ -190,12 +190,12 @@
     body.mobile header { flex-direction: column; align-items: flex-start; }
     body.mobile nav { width: 100%; justify-content: space-between; }
     body.mobile #centerSearchContainer { width: 94vw; top: 26%; }
-    body.mobile #dictionaryView { padding: 8px; }
+    body.mobile #dictionaryView { padding: 6px; }
     body.mobile .grid-layout { grid-template-columns: 1fr; gap: 12px; max-width: 100%; width: 100%; margin: 0; }
     body.mobile aside { padding-right: 0; width: 100%; }
     body.mobile #entryPanel { width: 100%; }
     body.mobile .entry-card { width: 100%; box-sizing: border-box; }
-    body.mobile .entry-body { padding: 0 10px; }
+    body.mobile .entry-body { padding: 0 8px; }
     body.mobile .entry-card.selection-mode { width: 100%; }
     body.mobile .entry-card.selection-mode .entry-body { padding: 0 6px; }
     body.mobile .entry-card.selection-mode .def-card { margin: 8px 0; }
@@ -206,9 +206,12 @@
     body.mobile .entry-card { border-radius: 12px; }
     body.mobile .entry-header { padding: 12px; }
     body.mobile .entry-header > div { flex-direction: column; align-items: flex-start; gap: 8px; }
-    body.mobile .lemma-text { font-size: 22px; }
+    body.mobile .lemma-text { font-size: 24px; }
     body.mobile .pill { font-size: 10px; }
-    body.mobile .def-card { margin: 8px 0; }
+    body.mobile .def-card { margin: 8px 0; padding: 12px; }
+    body.mobile .def-block { font-size: 15px; line-height: 1.6; }
+    body.mobile .example-block { font-size: 13px; }
+    body.mobile .input { font-size: 16px; padding: 12px; }
     body.mobile .notes-section,
     body.mobile .notes-container { margin-left: 0; margin-right: 0; }
     body.mobile .expand-control { padding: 10px 12px; }
@@ -815,6 +818,12 @@ function goHome() {
   initLandingAnimation();
 }
 
+function getSearchKeepoutPad(rect) {
+  if (!rect) return 120;
+  const scale = Math.max(rect.width, rect.height) * 0.35;
+  return Math.max(100, Math.min(170, Math.round(scale)));
+}
+
 function initLandingAnimation() {
   const container = $('#landingLayer');
   document.querySelectorAll('.drifting-word').forEach(e => e.remove());
@@ -825,7 +834,11 @@ function initLandingAnimation() {
   DRIFTERS = [];
 
   const searchBox = $('#centerSearchContainer').getBoundingClientRect();
-  const pad = 90;
+  const pad = getSearchKeepoutPad(searchBox);
+  const keepLeft = searchBox.left - pad;
+  const keepRight = searchBox.right + pad;
+  const keepTop = searchBox.top - pad;
+  const keepBottom = searchBox.bottom + pad;
   const maxX = window.innerWidth;
   const maxY = window.innerHeight;
 
@@ -838,11 +851,11 @@ function initLandingAnimation() {
       y = Math.random() * (maxY - 100);
       tries++;
     } while (
-      tries < 80 &&
-      x < (searchBox.right + pad) &&
-      (x + 100) > (searchBox.left - pad) &&
-      y < (searchBox.bottom + pad) &&
-      (y + 30) > (searchBox.top - pad)
+      tries < 120 &&
+      x < keepRight &&
+      (x + 100) > keepLeft &&
+      y < keepBottom &&
+      (y + 30) > keepTop
     );
     el.style.transform = `translate(${x}px, ${y}px)`; container.appendChild(el);
     el.onmouseenter = () => { el.dataset.frozen = "true"; }; el.onmouseleave = () => { el.dataset.frozen = "false"; };
@@ -854,7 +867,7 @@ function initLandingAnimation() {
 function animateDrifters() {
   const searchBox = $('#centerSearchContainer').getBoundingClientRect();
   const maxX = window.innerWidth; const maxY = window.innerHeight;
-  const pad = 90; // keep-out zone around search bar
+  const pad = getSearchKeepoutPad(searchBox); // keep-out zone around search bar
   const left = searchBox.left - pad;
   const right = searchBox.right + pad;
   const top = searchBox.top - pad;
@@ -983,12 +996,12 @@ async function fetchStaticEntryByLemma(lemma) {
   if (!chunkName) return null;
   if (!STATIC_CHUNK_CACHE.has(chunkName)) {
     const r = await fetch(`${window.location.origin}/data/${chunkName}`);
-    if (!r.ok) throw new Error("Chunk not found");
+    if (!r.ok) return null;
     const data = await r.json();
     STATIC_CHUNK_CACHE.set(chunkName, data);
   }
   const data = STATIC_CHUNK_CACHE.get(chunkName);
-  return data.find(e => e.slug === slug) || null;
+  return data ? (data.find(e => e.slug === slug) || null) : null;
 }
 
 function mapCardToWord(wordData, card) {
@@ -1054,9 +1067,14 @@ async function getWordDataForCard(card) {
   if (!card) return null;
   // Prefer static data when available.
   if (STATIC_MODE || window.__STATIC_INDEX__ === true || window.__API_BASE__ === '') {
-    let data = await fetchStaticEntryByLemma(card.lemma);
-    if (!data && card.snapshot) data = card.snapshot;
-    return data;
+    try {
+      let data = await fetchStaticEntryByLemma(card.lemma);
+      if (!data && card.snapshot) data = card.snapshot;
+      return data;
+    } catch (e) {
+      if (card.snapshot) return card.snapshot;
+      return null;
+    }
   }
 
   // Dynamic/API mode
@@ -1106,33 +1124,76 @@ function getAnkiStyleBlock() {
 </style>`;
 }
 
+function applyAnkiInlineStyles(root) {
+  if (!root) return;
+  const set = (selector, css) => root.querySelectorAll(selector).forEach(el => { el.style.cssText = css; });
+  set('.pos-group-header', 'margin:0 0 10px 0;font-size:13px;font-weight:700;color:#111;text-transform:capitalize;letter-spacing:0.02em;');
+  set('.def-card', 'border:none;padding:0 0 18px 0;margin:0;background:transparent;box-shadow:none;');
+  set('.def-block', 'display:block;line-height:1.6;font-size:15px;color:#111;');
+  set('.example-block', 'margin-top:8px;padding-left:0;border-left:none;font-size:14px;color:#5a5a5a;font-style:italic;display:block;');
+  set('.notes-section', 'margin-top:18px;padding-top:18px;border-top:1px solid #e6e6e6;');
+  set('.notes-label', 'font-size:11px;font-weight:700;text-transform:uppercase;color:#5a5a5a;margin-bottom:6px;letter-spacing:0.05em;');
+}
+
+function buildReviewHtmlFromData(wordData, card) {
+  if (!wordData || !Array.isArray(wordData.senses)) return '';
+
+  const mappedCard = mapCardToWord(wordData, card) || card || {};
+  const selected = new Set((mappedCard.senses || []).map(s => s.toString()));
+  const hiddenEx = new Set((mappedCard.hiddenEx || []).map(s => s.toString()));
+
+  const groups = {};
+  let includedCount = 0;
+
+  const addSense = (s) => {
+    const label = normalizePos(s.attr || wordData.pos || 'General');
+    groups[label] = groups[label] || [];
+    groups[label].push(s);
+    includedCount++;
+  };
+
+  wordData.senses.forEach(s => {
+    if (selected.size > 0) {
+      if (!selected.has(s.id.toString())) return;
+    }
+    addSense(s);
+  });
+
+  if (selected.size > 0 && includedCount === 0) {
+    // If saved sense IDs no longer match, fall back to all senses.
+    wordData.senses.forEach(addSense);
+  }
+
+  const parts = [];
+  Object.keys(groups).forEach(k => {
+    parts.push(`<div class="pos-group-header">${k}</div>`);
+    groups[k].forEach(s => {
+      const exId = s.ex_id ? s.ex_id.toString() : '';
+      const showEx = s.ex && (!exId || !hiddenEx.has(exId));
+      parts.push(
+        `<div class="def-card"><span class="def-block">${s.def}</span>${showEx ? `<span class="example-block">${s.ex}</span>` : ''}</div>`
+      );
+    });
+  });
+
+  const noteText = state.notes?.[wordData.lemma] || '';
+  if (mappedCard.includeNotes && noteText.trim() !== '') {
+    parts.push(
+      `<div class="notes-section"><div class="notes-label">My Notes</div><div style="font-style:italic; white-space:pre-wrap;">${noteText}</div></div>`
+    );
+  }
+
+  return `<div class="review-content">${parts.join('')}</div>`;
+}
+
 function buildReviewHtml(wordData, card) {
-  const container = document.createElement('div');
-  const mappedCard = mapCardToWord(wordData, card);
-  renderEntry(container, wordData, true, mappedCard);
-  if (!container.innerText.trim()) {
-    const allCard = { ...mappedCard, senses: wordData.senses.map(s => s.id) };
-    renderEntry(container, wordData, true, allCard);
-  }
-  if (!container.innerText.trim()) {
-    // Hard fallback: build minimal HTML from senses
-    const parts = [];
-    const groups = {};
-    wordData.senses.forEach(s => {
-      const label = normalizePos(s.attr || wordData.pos || 'General');
-      groups[label] = groups[label] || [];
-      groups[label].push(s);
-    });
-    Object.keys(groups).forEach(k => {
-      parts.push(`<div class="pos-group-header">${k}</div>`);
-      groups[k].forEach(s => {
-        parts.push(`<div class="def-card"><span class="def-block">${s.def}</span>${s.ex ? `<span class="example-block">${s.ex}</span>` : ''}</div>`);
-      });
-    });
-    container.innerHTML = `<div class="review-content">${parts.join('')}</div>`;
-  }
-  const styleBlock = getAnkiStyleBlock();
-  return `${styleBlock}<div class="anki-root"><div class="anki-card">${container.innerHTML}</div></div>`;
+  const rawHtml = buildReviewHtmlFromData(wordData, card);
+  const temp = document.createElement('div');
+  temp.innerHTML = rawHtml;
+  applyAnkiInlineStyles(temp);
+  const outerStyle = 'font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;color:#111;background:#fff;';
+  const cardStyle = 'border:1px solid #d7d7d7;border-radius:12px;padding:28px 26px;background:#fff;';
+  return `<div style="${outerStyle}"><div style="${cardStyle}">${temp.innerHTML}</div></div>`;
 }
 
 async function exportDeckToAnki() {
@@ -1398,8 +1459,8 @@ function saveSelection() {
 
   if (!ALLOW_DUPLICATES) {
     const lemmaLower = (CURRENT_WORD?.lemma || '').toLowerCase();
-    const exists = state.deck.some(c => (c.lemma || '').toLowerCase() === lemmaLower && c.deck === state.selectedDeckForAdd);
-    if (exists) { showToast("Card already exists in this deck"); return; }
+    const exists = state.deck.some(c => (c.lemma || '').toLowerCase() === lemmaLower);
+    if (exists) { showToast("Card already exists"); return; }
   }
 
   const hiddenEx = [];
@@ -1654,7 +1715,8 @@ async function loadReviewCard() {
     $('#time-again').textContent = '1m';
     $('#time-good').textContent = fmt(ivl === 0 ? 1 : ivl * factor);
     $('#time-easy').textContent = fmt(ivl === 0 ? 4 : ivl * factor * 1.3);
-    renderEntry($('#cardBackContent'), wordData, true, mappedCard);
+    const backHtml = buildReviewHtmlFromData(wordData, mappedCard);
+    $('#cardBackContent').innerHTML = backHtml || `<div style="color:var(--danger); padding:20px;">Error loading word data.</div>`;
   } catch(e) {
     $('#cardBackContent').innerHTML = `<div style="color:var(--danger); padding:20px;">Error loading word data.<br><small>${e.message}</small></div>`;
   }

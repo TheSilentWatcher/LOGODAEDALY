@@ -189,11 +189,23 @@
     body.mobile header { flex-direction: column; align-items: flex-start; }
     body.mobile nav { width: 100%; justify-content: space-between; }
     body.mobile #centerSearchContainer { width: 94vw; top: 26%; }
-    body.mobile .grid-layout { grid-template-columns: 1fr; gap: 16px; }
+    body.mobile #dictionaryView { padding: 10px; }
+    body.mobile .grid-layout { grid-template-columns: 1fr; gap: 16px; max-width: none; }
+    body.mobile aside { padding-right: 0; }
     body.mobile .browser-grid { grid-template-columns: 1fr; }
     body.mobile .browser-sidebar { max-height: 240px; }
     body.mobile .flashcard-inner { min-height: 260px; }
     body.mobile .review-controls { grid-template-columns: 1fr; }
+    body.mobile .entry-card { border-radius: 12px; }
+    body.mobile .entry-header { padding: 12px; }
+    body.mobile .entry-header > div { flex-direction: column; align-items: flex-start; gap: 8px; }
+    body.mobile .lemma-text { font-size: 22px; }
+    body.mobile .pill { font-size: 10px; }
+    body.mobile .def-card { margin: 8px 0; }
+    body.mobile .notes-section,
+    body.mobile .notes-container { margin-left: 0; margin-right: 0; }
+    body.mobile .expand-control { padding: 10px 12px; }
+    body.mobile .results-card { max-height: 260px; }
   </style>
 </head>
 <body>

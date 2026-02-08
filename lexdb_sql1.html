@@ -66,8 +66,13 @@
     .entry-card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); margin-bottom: 16px; overflow: hidden; transition: border-color 0.2s; }
     .entry-card.selection-mode { border-color: var(--fg); box-shadow: 0 0 0 1px var(--fg); }
     .entry-header { padding: 16px 20px; border-bottom: 1px solid var(--border); background: var(--panel); }
-    .lemma-text { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
-    .pill { padding: 2px 8px; border-radius: 99px; background: var(--bg); border: 1px solid var(--border); font-size: 11px; font-family: var(--mono); color: var(--muted); }
+    .entry-header-row { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+    .entry-title-row { display:flex; align-items:baseline; gap:10px; flex-wrap: wrap; }
+    .entry-actions { display:flex; align-items:center; gap:8px; flex-wrap: wrap; }
+    .deck-select-row { display:flex; align-items:center; gap:10px; flex-wrap: wrap; }
+    .lemma-text { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; word-break: break-word; }
+    .pill { padding: 2px 8px; border-radius: 99px; background: var(--bg); border: 1px solid var(--border); font-size: 11px; font-family: var(--mono); color: var(--muted); white-space: nowrap; }
+    .pill.ipa-pill { white-space: normal; }
     
     .def-card { padding: 12px; border: 1px solid var(--border-2); border-radius: var(--radius-sm); background: var(--bg); margin: 10px 20px; }
     .def-card.disabled { opacity: 0.5; pointer-events: none; }
@@ -213,7 +218,12 @@
 
     body.mobile .entry-card { width: 100%; box-sizing: border-box; border-radius: 16px; box-shadow: 0 6px 18px rgba(0,0,0,0.06); }
     body.mobile .entry-header { padding: 14px; }
-    body.mobile .entry-header > div { flex-direction: column; align-items: flex-start; gap: 10px; width: 100%; }
+    body.mobile .entry-header-row { flex-direction: column; align-items: flex-start; gap: 10px; width: 100%; }
+    body.mobile .entry-title-row { flex-direction: column; align-items: flex-start; gap: 6px; width: 100%; }
+    body.mobile .entry-actions { width: 100%; justify-content: flex-start; }
+    body.mobile .deck-select-row { width: 100%; flex-direction: column; align-items: stretch; gap: 8px; }
+    body.mobile .deck-select-row > * { width: 100%; }
+    body.mobile .deck-select-row label { justify-content: flex-start; }
     body.mobile #saveDeckSelect { width: 100%; }
     body.mobile .entry-body { padding: 0 8px; }
     body.mobile .entry-card.selection-mode .entry-body { padding: 0 6px; }
@@ -1393,7 +1403,9 @@ function renderEntry(target, word, isReview = false, cardData = null, isBrowserE
   if (!isReview) {
     if (SELECTION_MODE) {
       const deckOpts = state.decks.map(d => `<option value="${d}" ${d===state.selectedDeckForAdd?'selected':''}>${d}</option>`).join('');
-      deckSelectHtml = isEditing ? `<span class="pill">Editing Card</span>` : `<div style="display:flex; align-items:center; gap:10px;"><select id="saveDeckSelect" class="input" style="padding:4px; height:32px;" onchange="changeAddDeck(this.value)">${deckOpts}</select><button class="btn" style="padding:0 8px; height:32px;" onclick="createNewDeckInPlace()">New</button><label style="font-size:12px; display:flex; gap:4px; align-items:center; cursor:pointer; user-select:none;"><input type="checkbox" onchange="toggleAllowDups(this.checked)" ${ALLOW_DUPLICATES?'checked':''} class="chk"> Allow Dups</label></div>`;
+      deckSelectHtml = isEditing
+        ? `<span class="pill">Editing Card</span>`
+        : `<div class="deck-select-row"><select id="saveDeckSelect" class="input" style="padding:4px; height:32px;" onchange="changeAddDeck(this.value)">${deckOpts}</select><button class="btn" style="padding:0 8px; height:32px;" onclick="createNewDeckInPlace()">New</button><label class="allow-dups" style="font-size:12px; display:flex; gap:4px; align-items:center; cursor:pointer; user-select:none;"><input type="checkbox" onchange="toggleAllowDups(this.checked)" ${ALLOW_DUPLICATES?'checked':''} class="chk"> Allow Dups</label></div>`;
       const saveAction = isEditing ? `saveEdit()` : `saveSelection()`;
       btnHtml = `<div style="display:flex; gap:8px;"><button class="btn" style="height:32px;" onclick="cancelSelection()">Cancel</button><button class="btn-circle active" onclick="${saveAction}" title="Save">✓</button></div>`;
     } else {
@@ -1409,7 +1421,7 @@ function renderEntry(target, word, isReview = false, cardData = null, isBrowserE
   if (isReview) {
       target.innerHTML = `<div class="entry-body">${bodyHtml}</div>`;
   } else {
-      target.innerHTML = `<div class="entry-card ${SELECTION_MODE ? 'selection-mode' : ''}"><div class="entry-header"><div style="display:flex; justify-content:space-between; align-items:center;"><div style="display:flex; align-items:baseline; gap:10px;"><div class="lemma-text">${word.lemma}</div><span class="pill">${word.ipa || ''}</span>${deckSelectHtml}</div>${btnHtml}</div></div><div class="entry-body">${bodyHtml}</div>${(!isReview && !SELECTION_MODE && (totalSenses > 3 || showAll)) ? `<div class="expand-control"><button class="expand-btn" onclick="toggleExpand()">${btnText}</button><div class="lock-wrapper ${isLocked ? 'active' : ''}" onclick="toggleLock(this)"><div class="lock-icon"></div></div></div>` : ''}</div>`;
+      target.innerHTML = `<div class="entry-card ${SELECTION_MODE ? 'selection-mode' : ''}"><div class="entry-header"><div class="entry-header-row"><div class="entry-title-row"><div class="lemma-text">${word.lemma}</div><span class="pill ipa-pill">${word.ipa || ''}</span>${deckSelectHtml}</div><div class="entry-actions">${btnHtml}</div></div></div><div class="entry-body">${bodyHtml}</div>${(!isReview && !SELECTION_MODE && (totalSenses > 3 || showAll)) ? `<div class="expand-control"><button class="expand-btn" onclick="toggleExpand()">${btnText}</button><div class="lock-wrapper ${isLocked ? 'active' : ''}" onclick="toggleLock(this)"><div class="lock-icon"></div></div></div>` : ''}</div>`;
   }
 }
 

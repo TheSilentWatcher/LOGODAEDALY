@@ -114,7 +114,41 @@ def chunked(items: List[Dict], size: int) -> List[List[Dict]]:
     return [items[i:i + size] for i in range(0, len(items), size)]
 
 
-def write_site(out_dir: Path, chunk_size: int) -> Tuple[int, int]:
+def write_sitemap(out_dir: Path, manifest: List[Dict[str, str]], base_url: str) -> int:
+    base = base_url.rstrip("/")
+    urls = [f"{base}/"] + [f"{base}/lemma/{m['slug']}" for m in manifest]
+
+    def render_urlset(url_list: List[str]) -> str:
+        lines = ['<?xml version="1.0" encoding="UTF-8"?>',
+                 '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+        for u in url_list:
+            lines.append(f"  <url><loc>{u}</loc></url>")
+        lines.append("</urlset>")
+        return "\n".join(lines) + "\n"
+
+    # Split into multiple sitemaps if over 50k URLs.
+    max_urls = 50000
+    if len(urls) <= max_urls:
+        (out_dir / "sitemap.xml").write_text(render_urlset(urls), encoding="utf-8")
+        return 1
+
+    chunks = [urls[i:i + max_urls] for i in range(0, len(urls), max_urls)]
+    sitemap_files = []
+    for i, chunk in enumerate(chunks, 1):
+        name = f"sitemap-{i}.xml"
+        (out_dir / name).write_text(render_urlset(chunk), encoding="utf-8")
+        sitemap_files.append(name)
+
+    index_lines = ['<?xml version="1.0" encoding="UTF-8"?>',
+                   '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for name in sitemap_files:
+        index_lines.append(f"  <sitemap><loc>{base}/{name}</loc></sitemap>")
+    index_lines.append("</sitemapindex>")
+    (out_dir / "sitemap.xml").write_text("\n".join(index_lines) + "\n", encoding="utf-8")
+    return len(sitemap_files)
+
+
+def write_site(out_dir: Path, chunk_size: int, base_url: str) -> Tuple[int, int, int]:
     template = load_template()
     entries = fetch_entries()
     data_dir = out_dir / "data"
@@ -153,19 +187,23 @@ def write_site(out_dir: Path, chunk_size: int) -> Tuple[int, int]:
         encoding="utf-8"
     )
 
-    return len(entries), len(chunks)
+    sitemap_count = write_sitemap(out_dir, manifest, base_url)
+    return len(entries), len(chunks), sitemap_count
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="site", help="Output folder for static site")
     ap.add_argument("--chunk-size", type=int, default=1000)
+    ap.add_argument("--base-url", default=os.environ.get("LOGODAEDALY_BASE_URL", "https://logodaedaly.pages.dev"),
+                    help="Base URL for sitemap (default: https://logodaedaly.pages.dev)")
     args = ap.parse_args()
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
-    count, chunks = write_site(out_dir, args.chunk_size)
+    count, chunks, sitemaps = write_site(out_dir, args.chunk_size, args.base_url)
     print(f"Wrote {count} entries into {chunks} data chunks in {out_dir}")
+    print(f"Wrote {sitemaps} sitemap file(s) in {out_dir}")
     return 0
 
 

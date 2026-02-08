@@ -153,6 +153,37 @@
     .modal .field label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 6px; }
     .modal .actions { display: flex; gap: 8px; margin-top: 12px; }
     .modal .link { font-size: 12px; color: var(--muted); cursor: pointer; text-decoration: underline; }
+
+    /* Mobile responsiveness */
+    @media (max-width: 900px) {
+      header { flex-wrap: wrap; gap: 10px; }
+      nav { gap: 12px; }
+      #centerSearchContainer { width: 92vw; }
+      .grid-layout { grid-template-columns: 1fr; gap: 20px; }
+      aside, #entryPanel { height: auto; }
+      #dictionaryView { padding: 12px; }
+      .browser-grid { grid-template-columns: 1fr; }
+      .browser-sidebar { max-height: 260px; }
+      .review-controls { grid-template-columns: 1fr 1fr; }
+      .flashcard-inner { min-height: 320px; }
+      .entry-header { padding: 12px 14px; }
+      .lemma-text { font-size: 22px; }
+    }
+
+    @media (max-width: 600px) {
+      header { padding: 10px 12px; }
+      .product-name { font-size: 12px; }
+      nav a { font-size: 12px; }
+      #centerSearchContainer { width: 94vw; top: 28%; }
+      .lemma-text { font-size: 20px; }
+      .btn { padding: 6px 10px; font-size: 12px; }
+      .btn-circle { width: 28px; height: 28px; font-size: 16px; }
+      .review-controls { grid-template-columns: 1fr; }
+      .flashcard-inner { min-height: 280px; }
+      .entry-card { margin-bottom: 12px; }
+      .def-card { margin: 8px 12px; }
+      .notes-section { margin: 10px 12px 12px 12px; }
+    }
   </style>
 </head>
 <body>

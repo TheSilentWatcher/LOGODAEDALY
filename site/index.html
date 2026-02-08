@@ -824,7 +824,7 @@ function initLandingAnimation() {
   DRIFTERS = [];
 
   const searchBox = $('#centerSearchContainer').getBoundingClientRect();
-  const pad = 50;
+  const pad = 90;
   const maxX = window.innerWidth;
   const maxY = window.innerHeight;
 
@@ -853,7 +853,7 @@ function initLandingAnimation() {
 function animateDrifters() {
   const searchBox = $('#centerSearchContainer').getBoundingClientRect();
   const maxX = window.innerWidth; const maxY = window.innerHeight;
-  const pad = 50; // keep-out zone around search bar
+  const pad = 90; // keep-out zone around search bar
   const left = searchBox.left - pad;
   const right = searchBox.right + pad;
   const top = searchBox.top - pad;
@@ -1045,6 +1045,27 @@ function buildReviewHtml(wordData, card) {
   const container = document.createElement('div');
   const mappedCard = mapCardToWord(wordData, card);
   renderEntry(container, wordData, true, mappedCard);
+  if (!container.innerText.trim()) {
+    const allCard = { ...mappedCard, senses: wordData.senses.map(s => s.id) };
+    renderEntry(container, wordData, true, allCard);
+  }
+  if (!container.innerText.trim()) {
+    // Hard fallback: build minimal HTML from senses
+    const parts = [];
+    const groups = {};
+    wordData.senses.forEach(s => {
+      const label = normalizePos(s.attr || wordData.pos || 'General');
+      groups[label] = groups[label] || [];
+      groups[label].push(s);
+    });
+    Object.keys(groups).forEach(k => {
+      parts.push(`<div class="pos-group-header">${k}</div>`);
+      groups[k].forEach(s => {
+        parts.push(`<div class="def-card"><span class="def-block">${s.def}</span>${s.ex ? `<span class="example-block">${s.ex}</span>` : ''}</div>`);
+      });
+    });
+    container.innerHTML = `<div class="review-content">${parts.join('')}</div>`;
+  }
   const styleBlock = getAnkiStyleBlock();
   return `${styleBlock}<div class="anki-root"><div class="anki-card">${container.innerHTML}</div></div>`;
 }
@@ -1071,9 +1092,7 @@ async function exportDeckToAnki() {
       if (!wordData) throw new Error("Word not found");
       ensureIds(wordData);
       const backHtml = buildReviewHtml(wordData, card);
-      const plain = backHtml.replace(/<[^>]*>/g, '').trim();
-      const safeBack = plain ? backHtml : `<div>${card.lemma}</div>`;
-      rows.push(`${tsvEscape(card.lemma)}\t${tsvEscape(safeBack)}`);
+      rows.push(`${tsvEscape(card.lemma)}\t${tsvEscape(backHtml)}`);
     } catch (e) {
       rows.push(`${tsvEscape(card.lemma)}\t${tsvEscape(`<div>${card.lemma}</div>`)}`);
     }

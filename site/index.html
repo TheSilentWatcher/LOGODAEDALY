@@ -368,7 +368,9 @@
 <script>window.__STATIC_INDEX__ = true;window.__API_BASE__ = '';window.__MOBILE__ = window.matchMedia('(max-width: 760px)').matches;document.title = 'Logodaedaly';</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-const API_BASE = window.__API_BASE__ || `${window.location.origin}/api`;
+const API_BASE = (window.__API_BASE__ !== undefined && window.__API_BASE__ !== null)
+  ? window.__API_BASE__
+  : `${window.location.origin}/api`;
 const POS_MAP = { 'n':'Noun', 'noun':'Noun', 'v':'Verb', 'verb':'Verb', 'vt':'Transitive Verb', 'vi':'Intransitive Verb', 'adj':'Adjective', 'adjective':'Adjective', 'adv':'Adverb', 'adverb':'Adverb', 'prep':'Preposition', 'conj':'Conjunction', 'pron':'Pronoun', 'interj':'Interjection', 'art':'Article', 'num':'Numeral', 'aux':'Auxiliary Verb', 'phrasal':'Phrasal Verb' };
 
 let LEXICON_INDEX = [];
@@ -379,6 +381,7 @@ let ALLOW_DUPLICATES = false;
 let EDIT_CARD_ID = null;
 let ACTION_STACK = [];
 let PENDING_DELETES = {};
+const PENDING_DELETE_KEY = "lex_v9_pending_deletes";
 let DRIFTERS = [];
 let ANIMATION_ID = null;
 let RETURN_TO_VIEW = null; 
@@ -417,6 +420,7 @@ async function init() {
   populateDeckSelects();
   updateDashboard(); 
   initAuth();
+  applyPendingDeletes();
 
   if (window.__LEMMA_DATA__) {
     CURRENT_WORD = window.__LEMMA_DATA__;
@@ -553,6 +557,58 @@ function initAuth() {
   setInterval(() => {
     if (CURRENT_USER) saveProgress();
   }, 60000);
+}
+
+function loadPendingDeletes() {
+  try {
+    return JSON.parse(localStorage.getItem(PENDING_DELETE_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function savePendingDeletes(obj) {
+  localStorage.setItem(PENDING_DELETE_KEY, JSON.stringify(obj));
+}
+
+function finalizeDelete(cardId, opts = {}) {
+  state.deck = state.deck.filter(c => c.id !== cardId);
+  localStorage.setItem('lex_v9_deck', JSON.stringify(state.deck));
+  const pending = loadPendingDeletes();
+  delete pending[cardId];
+  savePendingDeletes(pending);
+  delete PENDING_DELETES[cardId];
+  const li = document.querySelector(`#card_li_${cardId}`);
+  if (li) li.remove();
+  if (opts.onDelete) opts.onDelete();
+  updateDashboard();
+}
+
+function schedulePendingDelete(cardId, data, opts = {}) {
+  const grace = 2500;
+  const elapsed = Date.now() - data.ts;
+  const remaining = Math.max(0, grace - elapsed);
+  if (remaining === 0) {
+    finalizeDelete(cardId, opts);
+    return;
+  }
+  const li = document.querySelector(`#card_li_${cardId}`);
+  if (li) li.classList.add('pending-delete');
+  PENDING_DELETES[cardId] = setTimeout(() => finalizeDelete(cardId, opts), remaining);
+}
+
+function applyPendingDeletes() {
+  const pending = loadPendingDeletes();
+  Object.entries(pending).forEach(([cardId, data]) => {
+    const exists = state.deck.some(c => c.id == cardId);
+    if (!exists) {
+      const rest = loadPendingDeletes();
+      delete rest[cardId];
+      savePendingDeletes(rest);
+      return;
+    }
+    schedulePendingDelete(cardId, data);
+  });
 }
 
 function updateAuthUI() {
@@ -1006,12 +1062,11 @@ async function exportDeckToAnki() {
   for (const card of cards) {
     try {
       let wordData = null;
-      if (STATIC_MODE) {
-        wordData = await fetchStaticEntryByLemma(card.lemma);
-      } else {
+      // Always try static lookup first (works on deployed static site).
+      wordData = await fetchStaticEntryByLemma(card.lemma);
+      if (!wordData) {
         const r = await fetch(`${API_BASE}/word/${card.lemma}`);
-        if (!r.ok) throw new Error("Word not found");
-        wordData = await r.json();
+        if (r.ok) wordData = await r.json();
       }
       if (!wordData) throw new Error("Word not found");
       ensureIds(wordData);
@@ -1298,14 +1353,10 @@ function softDeleteCard(cardId, opts = {}) {
   const li = document.querySelector(`#card_li_${cardId}`);
   if (li) li.classList.add('pending-delete');
 
-  const timer = setTimeout(() => {
-    state.deck = state.deck.filter(c => c.id !== cardId);
-    localStorage.setItem('lex_v9_deck', JSON.stringify(state.deck));
-    delete PENDING_DELETES[cardId];
-    if (li) li.remove();
-    if (opts.onDelete) opts.onDelete();
-    updateDashboard();
-  }, 2500);
+  const pending = loadPendingDeletes();
+  pending[cardId] = { ts: Date.now(), card: card, index: cardIdx };
+  savePendingDeletes(pending);
+  const timer = setTimeout(() => finalizeDelete(cardId, opts), 2500);
 
   PENDING_DELETES[cardId] = timer;
   ACTION_STACK.push({ type: 'soft_delete', id: cardId, card: card, index: cardIdx });
@@ -1455,6 +1506,9 @@ function undoLastAction() {
       delete PENDING_DELETES[last.id];
       const li = document.querySelector(`#card_li_${last.id}`);
       if (li) li.classList.remove('pending-delete');
+      const pending = loadPendingDeletes();
+      delete pending[last.id];
+      savePendingDeletes(pending);
     } else {
       // Restore if already removed
       const exists = state.deck.some(c => c.id === last.id);

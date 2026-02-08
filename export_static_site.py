@@ -166,7 +166,13 @@ def write_site(out_dir: Path, chunk_size: int) -> Tuple[int, int]:
 
     # SPA fallback for Cloudflare Pages
     redirects_path = out_dir / "_redirects"
-    redirects_path.write_text("/* /index.html 200\n", encoding="utf-8")
+    redirects_path.write_text(
+        "/m.html /m.html 200\n"
+        "/index.html /index.html 200\n"
+        "/lemma/* /index.html 200\n"
+        "/* /index.html 200\n",
+        encoding="utf-8"
+    )
 
     return len(entries), len(chunks)
 
